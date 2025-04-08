@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 from typing import List
+from services.portfolio_optimization import optimize_portfolio
 
 router = APIRouter()
 
@@ -10,9 +11,9 @@ class PortfolioRequest(BaseModel):
     risk_free_rate: float = 0.01
 
 @router.post("/optimize")
-def optimize_portfolio(request: PortfolioRequest):
-    return {
-        "optimal_weights": {},
-        "expected_return": None,
-        "sharpe_ratio": None
-    }
+def optimize_portfolio_router(request: PortfolioRequest):
+    result = optimize_portfolio(
+        request.symbols,
+        request.returns,
+        request.risk_free_rate
+    )

@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
+from services.options_pricing import price_option
 
 router = APIRouter()
 
@@ -12,14 +13,14 @@ class OptionRequest(BaseModel):
     option_type: str  # 'call' or 'put'
 
 @router.post("/price")
-def price_option(request: OptionRequest):
-    return {
-        "option_type": request.option_type,
-        "price": None,
-        "greeks": {
-            "delta": None,
-            "vega": None,
-            "theta": None,
-            "gamma": None
-        }
-    }
+def price_option_router(request: OptionRequest):
+    result = price_option(
+        request.S,
+        request.K,
+        request.T,
+        request.r,
+        request.sigma,
+        request.option_type
+    )
+
+    return result

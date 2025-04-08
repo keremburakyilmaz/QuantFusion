@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 from typing import List
+from services.risk_engine import calculate_var
 
 router = APIRouter()
 
@@ -9,9 +10,10 @@ class RiskRequest(BaseModel):
     confidence_level: float
 
 @router.post("/var")
-def calculate_var(request: RiskRequest):
-    return {
-        "confidence_level": request.confidence_level,
-        "VaR": None,
-        "volatility": None
-    }
+def calculate_var_router(request: RiskRequest):
+    result = calculate_var(
+        request.asset_prices,
+        request.confidence_level
+    )
+
+    return result

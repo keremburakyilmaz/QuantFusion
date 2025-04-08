@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
+from services.trading_engine import run_strategy
 
 router = APIRouter()
 
@@ -10,15 +11,11 @@ class TradingRequest(BaseModel):
     strategy: str
 
 @router.post("/run")
-def run_trading_strategy(request: TradingRequest):
-    return {
-        "strategy": request.strategy,
-        "symbol": request.symbol,
-        "period": f"{request.start_date} to {request.end_date}",
-        "buy_signals": [],
-        "sell_signals": [],
-        "performance": {
-            "returns": None,
-            "sharpe_ratio": None
-        }
-    }
+def run_strategy_router(request: TradingRequest):
+    result = run_strategy(
+        request.symbol,
+        request.start_date,
+        request.end_date,
+        request.strategy
+    )
+    return result
