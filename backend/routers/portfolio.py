@@ -2,9 +2,9 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 from typing import Dict, List, Optional
 
-from services.portfolio_optimizers.mean_variance import optimize_mean_variance
-from services.portfolio_optimizers.risk_parity import optimize_risk_parity
-from services.portfolio_optimizers.black_litterman import optimize_black_litterman
+from services.portfolio_optimization.mean_variance import optimize_mean_variance
+from services.portfolio_optimization.risk_parity import optimize_risk_parity
+from services.portfolio_optimization.black_litterman import optimize_black_litterman
 
 router = APIRouter()
 
