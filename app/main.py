@@ -9,6 +9,7 @@ from app.cache import create_redis
 from app.config import settings
 from app.database import SessionLocal
 from app.routers import market as market_router
+from app.routers import risk as risk_router
 from app.services.data_service import DataService
 from app.tasks.price_sync import sync_prices
 
@@ -49,6 +50,7 @@ app.add_middleware(
 )
 
 app.include_router(market_router.router, prefix="/api/market", tags=["market"])
+app.include_router(risk_router.router, prefix="/api/risk", tags=["risk"])
 
 
 @app.get("/api/health")

@@ -1,6 +1,11 @@
 """Seed the demo portfolio: JEPI 30% / JEPQ 30% / VOO 20% / QQQ 20%."""
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from app.database import SessionLocal
 from app.models import Holding, Portfolio
 

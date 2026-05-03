@@ -191,6 +191,31 @@ class DataService:
         invalid = [t for t, ok in zip(tickers, results) if not ok]
         return {"valid": valid, "invalid": invalid}
 
+    # ---------- risk-free rate ----------
+
+    async def get_risk_free_rate(self) -> float:
+        """10-year Treasury yield as a decimal (e.g. 0.042 for 4.2%).
+
+        Cached 24h. Falls back to 0.04 if yfinance fails.
+        """
+        cached = await self.redis.get("rf_rate")
+        if cached:
+            try:
+                return float(cached)
+            except (TypeError, ValueError):
+                pass
+
+        df = await self._get_one_ticker("^TNX", lookback_days=5)
+        rate = 0.04
+        if df is not None and not df.empty:
+            try:
+                rate = float(df["close"].iloc[-1]) / 100.0
+            except (KeyError, IndexError, TypeError, ValueError):
+                rate = 0.04
+
+        await self.redis.set("rf_rate", str(rate), ex=CACHE_TTL_FUNDAMENTALS)
+        return rate
+
 
 # ---------- module-level helpers (mock points for tests) ----------
 
