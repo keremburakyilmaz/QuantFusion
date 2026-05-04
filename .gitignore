@@ -16,3 +16,4 @@ build/
 .idea/
 .vscode/
 .DS_Store
+data/regime_model.pkl

@@ -1,4 +1,3 @@
-"""Load demo portfolio holdings from the DB as a simple weights dict."""
 from __future__ import annotations
 
 import uuid

@@ -27,9 +27,6 @@ def _fake_price_df(days: int = 10) -> pd.DataFrame:
 
 
 class _StubSessionFactory:
-    """Session factory that always returns a session whose queries return nothing
-    and whose writes are no-ops."""
-
     def __call__(self):
         return _StubSession()
 

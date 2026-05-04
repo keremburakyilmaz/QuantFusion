@@ -95,6 +95,27 @@ class RegimeSnapshot(Base):
     __table_args__ = (Index("idx_regime_ts", text("ts DESC")),)
 
 
+class OptimizationRun(Base):
+    __tablename__ = "optimization_runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    portfolio_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("portfolios.id", ondelete="CASCADE")
+    )
+    method: Mapped[str] = mapped_column(Text, nullable=False)
+    target: Mapped[str | None] = mapped_column(Text)
+    result: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=text("NOW()")
+    )
+
+    __table_args__ = (
+        Index("idx_opt_runs_portfolio", "portfolio_id", text("created_at DESC")),
+    )
+
+
 class PortfolioSnapshot(Base):
     __tablename__ = "portfolio_snapshots"
 

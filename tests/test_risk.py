@@ -71,7 +71,6 @@ def test_cvar_at_most_var():
 def test_beta_one_for_self():
     svc = RiskService()
     returns = _synthetic_returns()
-    # Portfolio = 100% SPY → beta ≈ 1, tracking_error ≈ 0
     weights = {"SPY": 1.0}
     m = svc.compute_all(weights, returns, rf=0.04)
     assert m.beta == pytest.approx(1.0, abs=1e-6)

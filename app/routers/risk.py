@@ -2,19 +2,22 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.schemas.common import PortfolioInput
+from app.schemas.optimization import EfficientFrontierResponse
 from app.schemas.risk import RiskMetrics, VaRResult
 from app.services.data_service import DataService, LOOKBACK_DEFAULT
+from app.services.optimizer import PortfolioOptimizer
 from app.services.portfolio_loader import load_holdings
 from app.services.risk_service import BENCHMARK, RiskService
 
 
 router = APIRouter()
 risk_service = RiskService()
+optimizer = PortfolioOptimizer()
 
 
 def get_data_service(request: Request) -> DataService:
@@ -50,6 +53,27 @@ async def get_var(
     weights = load_holdings(db, portfolio_id)
     returns, _ = await _fetch_returns_and_rf(data, list(weights.keys()))
     return risk_service.compute_var(weights, returns)
+
+
+@router.get(
+    "/{portfolio_id}/efficient_frontier", response_model=EfficientFrontierResponse
+)
+async def get_efficient_frontier(
+    portfolio_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    data: DataService = Depends(get_data_service),
+) -> EfficientFrontierResponse:
+    weights = load_holdings(db, portfolio_id)
+    tickers = list(weights.keys())
+    returns = await data.get_returns(tickers, lookback_days=LOOKBACK_DEFAULT)
+    if returns.empty or len(returns.columns) < 2:
+        raise HTTPException(status_code=422, detail="Insufficient return data")
+    cov = returns.cov().values * 252
+    rf = await data.get_risk_free_rate()
+    points = optimizer.efficient_frontier(
+        returns, cov, n=150, rf=rf, current_weights=weights
+    )
+    return EfficientFrontierResponse(points=points)
 
 
 @router.post("/analyze", response_model=RiskMetrics)

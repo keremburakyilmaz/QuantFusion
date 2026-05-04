@@ -40,6 +40,7 @@ services:
         condition: service_healthy
     volumes:
       - .:/app
+      - ./data:/app/data
 
 volumes:
   pgdata:

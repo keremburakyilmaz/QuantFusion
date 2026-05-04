@@ -1,10 +1,3 @@
-"""initial schema
-
-Revision ID: 0001
-Revises:
-Create Date: 2026-05-02
-
-"""
 from __future__ import annotations
 
 from typing import Sequence, Union

@@ -1,7 +1,3 @@
-"""Single source of truth for market data.
-
-Cache-first: Redis (intraday) -> Postgres (historical) -> yfinance (fallback).
-"""
 from __future__ import annotations
 
 import asyncio
@@ -23,9 +19,9 @@ from app.models import PriceHistory
 
 logger = logging.getLogger(__name__)
 
-CACHE_TTL_PRICES = 3600          # 1 hour
-CACHE_TTL_FUNDAMENTALS = 86400   # 24 hours
-LOOKBACK_DEFAULT = 756           # ~3 years of trading days
+CACHE_TTL_PRICES = 3600
+CACHE_TTL_FUNDAMENTALS = 86400
+LOOKBACK_DEFAULT = 756
 
 
 def _prices_key(ticker: str, lookback_days: int) -> str:
@@ -41,12 +37,9 @@ class DataService:
         self.redis = redis
         self.session_factory = session_factory
 
-    # ---------- prices ----------
-
     async def get_prices(
         self, tickers: list[str], lookback_days: int = LOOKBACK_DEFAULT
     ) -> pd.DataFrame:
-        """Return wide DataFrame: index=date, columns=tickers, values=adj_close."""
         series: dict[str, pd.Series] = {}
         for ticker in tickers:
             df = await self._get_one_ticker(ticker, lookback_days)
@@ -65,7 +58,11 @@ class DataService:
             return _deserialize_price_df(cached)
 
         db_df = await asyncio.to_thread(self._read_prices_from_db, ticker, lookback_days)
-        if db_df is not None and _is_fresh(db_df):
+        if (
+            db_df is not None
+            and _is_fresh(db_df)
+            and len(db_df) >= int(lookback_days * 0.9)
+        ):
             await self.redis.set(
                 _prices_key(ticker, lookback_days),
                 _serialize_price_df(db_df),
@@ -138,15 +135,12 @@ class DataService:
     async def get_prices_detail(
         self, tickers: list[str], lookback_days: int = LOOKBACK_DEFAULT
     ) -> dict[str, pd.DataFrame]:
-        """Return per-ticker DataFrames with columns: ts, close, adj_close, volume."""
         result: dict[str, pd.DataFrame] = {}
         for ticker in tickers:
             df = await self._get_one_ticker(ticker, lookback_days)
             if df is not None and not df.empty:
                 result[ticker] = df.sort_values("ts").reset_index(drop=True)
         return result
-
-    # ---------- returns / covariance ----------
 
     async def get_returns(
         self, tickers: list[str], lookback_days: int = LOOKBACK_DEFAULT
@@ -164,10 +158,7 @@ class DataService:
             return np.empty((0, 0))
         return returns.cov().values * 252
 
-    # alias to match spec §5 wording
     get_covariance_matrix = covariance_matrix
-
-    # ---------- fundamentals + validation ----------
 
     async def get_fundamentals(self, ticker: str) -> dict:
         cached = await self.redis.get(_fundamentals_key(ticker))
@@ -191,13 +182,7 @@ class DataService:
         invalid = [t for t, ok in zip(tickers, results) if not ok]
         return {"valid": valid, "invalid": invalid}
 
-    # ---------- risk-free rate ----------
-
     async def get_risk_free_rate(self) -> float:
-        """10-year Treasury yield as a decimal (e.g. 0.042 for 4.2%).
-
-        Cached 24h. Falls back to 0.04 if yfinance fails.
-        """
         cached = await self.redis.get("rf_rate")
         if cached:
             try:
@@ -215,9 +200,6 @@ class DataService:
 
         await self.redis.set("rf_rate", str(rate), ex=CACHE_TTL_FUNDAMENTALS)
         return rate
-
-
-# ---------- module-level helpers (mock points for tests) ----------
 
 
 def _yf_download(ticker: str, lookback_days: int) -> pd.DataFrame | None:
@@ -258,7 +240,6 @@ def _yf_info(ticker: str) -> dict:
 def _yf_is_valid(ticker: str) -> bool:
     try:
         info = yf.Ticker(ticker).fast_info
-        # fast_info is a dict-like; valid tickers expose last_price / market_cap
         return bool(info) and (
             getattr(info, "last_price", None) is not None
             or getattr(info, "market_cap", None) is not None

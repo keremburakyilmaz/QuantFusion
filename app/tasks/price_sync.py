@@ -1,4 +1,3 @@
-"""Hourly job: refresh price cache for the demo + benchmark tickers."""
 from __future__ import annotations
 
 import logging
@@ -8,7 +7,7 @@ from app.services.data_service import DataService, LOOKBACK_DEFAULT
 
 logger = logging.getLogger(__name__)
 
-DEMO_TICKERS = ["JEPI", "JEPQ", "VOO", "QQQ", "SPY", "^VIX"]
+DEMO_TICKERS = ["JEPI", "JEPQ", "VOO", "QQQ", "SPY", "^VIX", "^TNX", "^IRX"]
 
 
 async def sync_prices(data_service: DataService) -> None:

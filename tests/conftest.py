@@ -5,8 +5,6 @@ import pytest
 
 @pytest.fixture
 def fake_redis():
-    """Minimal in-memory async Redis stub: get/set/delete/keys with TTL ignored."""
-
     class FakeRedis:
         def __init__(self):
             self.store: dict[str, str] = {}
