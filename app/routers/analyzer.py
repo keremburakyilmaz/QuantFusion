@@ -7,7 +7,13 @@ from app.schemas.analyzer import (
     AnalyzerValidateRequest,
     AnalyzerValidateResponse,
 )
+from app.schemas.snapshot import (
+    SaveSnapshotRequest,
+    SaveSnapshotResponse,
+    SnapshotResponse,
+)
 from app.services.analyzer_service import AnalyzerService
+from app.services.snapshot_service import SnapshotService
 
 
 router = APIRouter()
@@ -17,6 +23,13 @@ def get_analyzer(request: Request) -> AnalyzerService:
     svc: AnalyzerService | None = getattr(request.app.state, "analyzer_service", None)
     if svc is None:
         raise HTTPException(status_code=503, detail="Analyzer not initialized")
+    return svc
+
+
+def get_snapshot_service(request: Request) -> SnapshotService:
+    svc: SnapshotService | None = getattr(request.app.state, "snapshot_service", None)
+    if svc is None:
+        raise HTTPException(status_code=503, detail="Snapshot service not initialized")
     return svc
 
 
@@ -43,3 +56,31 @@ async def run(
         return await analyzer.run(body.holdings)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
+
+
+@router.post("/save", response_model=SaveSnapshotResponse)
+@limiter.limit("3/minute")
+async def save(
+    request: Request,
+    body: SaveSnapshotRequest,
+    analyzer: AnalyzerService = Depends(get_analyzer),
+    snapshots: SnapshotService = Depends(get_snapshot_service),
+) -> SaveSnapshotResponse:
+    try:
+        report = await analyzer.run(body.holdings)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return await snapshots.save(body.holdings, report, body.expires_in_days)
+
+
+@router.get("/snapshot/{token}", response_model=SnapshotResponse)
+@limiter.limit("60/minute")
+async def get_snapshot(
+    request: Request,
+    token: str,
+    snapshots: SnapshotService = Depends(get_snapshot_service),
+) -> SnapshotResponse:
+    snapshot = await snapshots.fetch(token)
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="Snapshot not found or expired")
+    return snapshot

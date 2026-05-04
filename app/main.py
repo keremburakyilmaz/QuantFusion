@@ -25,8 +25,10 @@ from app.services.data_service import DataService
 from app.services.optimizer import PortfolioOptimizer
 from app.services.regime_service import MODEL_PATH, RegimeService
 from app.services.risk_service import RiskService
+from app.services.snapshot_service import SnapshotService
 from app.tasks.price_sync import sync_prices
 from app.tasks.regime_update import update_regime
+from app.tasks.snapshot_cleanup import cleanup_snapshots
 
 
 scheduler = AsyncIOScheduler()
@@ -44,6 +46,7 @@ async def lifespan(app: FastAPI):
         backtester=VectorizedBacktester(),
         regime=app.state.regime_service,
     )
+    app.state.snapshot_service = SnapshotService(SessionLocal)
 
     scheduler.add_job(
         sync_prices,
@@ -60,6 +63,14 @@ async def lifespan(app: FastAPI):
         hour=1,
         args=[app.state.regime_service],
         id="regime_update",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        cleanup_snapshots,
+        "cron",
+        hour=2,
+        args=[app.state.snapshot_service],
+        id="snapshot_cleanup",
         replace_existing=True,
     )
     scheduler.start()
