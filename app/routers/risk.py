@@ -1,4 +1,4 @@
-from __future__ import annotations
+
 
 import uuid
 
@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.limiter import limiter
 from app.schemas.common import PortfolioInput
 from app.schemas.optimization import EfficientFrontierResponse
 from app.schemas.risk import RiskMetrics, VaRResult
@@ -77,7 +78,9 @@ async def get_efficient_frontier(
 
 
 @router.post("/analyze", response_model=RiskMetrics)
+@limiter.limit("10/minute")
 async def analyze(
+    request: Request,
     body: PortfolioInput,
     data: DataService = Depends(get_data_service),
 ) -> RiskMetrics:

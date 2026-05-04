@@ -1,4 +1,4 @@
-from __future__ import annotations
+
 
 import asyncio
 import uuid
@@ -8,6 +8,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.limiter import limiter
 from app.models import OptimizationRun
 from app.schemas.optimization import (
     OptimizationResult,
@@ -161,7 +162,9 @@ async def optimize_run(
 
 
 @router.post("/stateless", response_model=OptimizationResult)
+@limiter.limit("10/minute")
 async def optimize_stateless(
+    request: Request,
     body: OptimizeStatelessRequest,
     data: DataService = Depends(get_data_service),
     regime_service: RegimeService | None = Depends(get_regime_service),
