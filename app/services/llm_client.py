@@ -32,4 +32,5 @@ def get_llm() -> ChatOpenAI | None:
         model=settings.NIM_MODEL,
         temperature=0.2,
         max_tokens=512,
+        request_timeout=45.0,
     )

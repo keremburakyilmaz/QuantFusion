@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from app.schemas.common import HoldingInput
 
 
-Method = Literal["mvo", "risk_parity", "black_litterman", "regime_blended"]
+Method = Literal["mvo", "risk_parity", "black_litterman", "regime_blended", "earnings_tilt"]
 Target = Literal["max_sharpe", "min_vol", "target_return"]
 
 
@@ -35,6 +35,7 @@ class OptimizationResult(BaseModel):
     solve_ms: int
     regime_weights: dict[str, float] | None = None
     components: dict[str, dict[str, float]] | None = None
+    earnings_signals: dict[str, dict] | None = None
 
 
 class OptimizeRunRequest(BaseModel):

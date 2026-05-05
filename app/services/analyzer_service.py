@@ -11,6 +11,7 @@ from app.schemas.common import HoldingInput
 from app.services.agent_service import AgentService
 from app.services.backtester import VectorizedBacktester, _run_sync
 from app.services.data_service import DataService
+from app.services.ocr_service import OCRService
 from app.services.optimizer import PortfolioOptimizer
 from app.services.regime_service import RegimeService
 from app.services.risk_service import RiskService
@@ -28,6 +29,7 @@ class AnalyzerService:
         backtester: VectorizedBacktester,
         regime: RegimeService | None,
         agent: AgentService | None = None,
+        ocr: OCRService | None = None,
     ) -> None:
         self.data = data
         self.risk = risk
@@ -35,6 +37,7 @@ class AnalyzerService:
         self.backtester = backtester
         self.regime = regime
         self.agent = agent
+        self.ocr = ocr
 
     async def validate(self, tickers: list[str]) -> dict[str, list[str]]:
         return await self.data.validate_tickers(tickers)
@@ -99,11 +102,31 @@ class AnalyzerService:
                 returns, cov, regime.probabilities, rf, None,
             )
 
+        # Fetch latest earnings signals (non-blocking - empty dict when no data)
+        earnings: dict = {}
+        if self.ocr is not None:
+            earnings = await self.ocr.get_latest_signals(tickers)
+
         commentary = ""
         if regime is not None and self.agent is not None and self.agent.enabled:
             commentary = await self.agent.regime_commentary(
-                regime, holdings, risk_metrics
+                regime, holdings, risk_metrics, earnings=earnings or None
             )
+
+        # Annotate backtest results with stored earnings events
+        if self.ocr is not None and earnings:
+            import datetime as _dt
+            now = _dt.date.today()
+            since_1y = _dt.date(now.year - 1, now.month, now.day)
+            since_3y = _dt.date(now.year - 3, now.month, now.day)
+            events_1y, events_3y = await asyncio.gather(
+                self.ocr.get_events_for_period(tickers, since_1y),
+                self.ocr.get_events_for_period(tickers, since_3y),
+            )
+            if events_1y:
+                bt_1y.events = events_1y
+            if events_3y:
+                bt_3y.events = events_3y
 
         return AnalysisReport(
             holdings=holdings,

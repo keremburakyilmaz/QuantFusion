@@ -6,6 +6,7 @@ from datetime import date
 from pydantic import BaseModel, Field
 
 from app.schemas.common import HoldingInput, PortfolioInput
+from app.schemas.document import EarningsEvent
 
 
 class EquityPoint(BaseModel):
@@ -38,6 +39,7 @@ class BacktestResult(BaseModel):
     monthly_returns: list[MonthlyReturn]
     rebalance_freq: str
     transaction_cost_bps: float
+    events: list[EarningsEvent] | None = None
 
 
 class BacktestRunRequest(BaseModel):

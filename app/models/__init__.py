@@ -9,6 +9,7 @@ from sqlalchemy import (
     Date,
     ForeignKey,
     Index,
+    Integer,
     Numeric,
     String,
     Text,
@@ -128,3 +129,25 @@ class PortfolioSnapshot(Base):
     expires_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))
 
     __table_args__ = (Index("idx_snapshots_expires", "expires_at"),)
+
+
+class EarningsDocument(Base):
+    __tablename__ = "earnings_documents"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    ticker: Mapped[str] = mapped_column(Text, nullable=False)
+    uploaded_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=text("NOW()")
+    )
+    filing_date: Mapped[str | None] = mapped_column(Text)
+    form_type: Mapped[str | None] = mapped_column(Text, server_default=text("'8-K'"))
+    pages: Mapped[int | None] = mapped_column(Integer)
+    ocr_text: Mapped[str | None] = mapped_column(Text)
+    signals: Mapped[dict | None] = mapped_column(JSONB)
+
+    __table_args__ = (
+        UniqueConstraint("ticker", "filing_date", name="uq_earnings_ticker_filing_date"),
+        Index("idx_earnings_docs_ticker", "ticker", text("uploaded_at DESC")),
+    )

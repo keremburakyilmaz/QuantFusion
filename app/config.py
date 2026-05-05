@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     NVIDIA_API_KEY: str = ""
     NIM_MODEL: str = "nvidia/llama-3.1-nemotron-70b-instruct"
     NIM_BASE_URL: str = "https://integrate.api.nvidia.com/v1"
+    NIM_OCR_MODEL: str = "nvidia/nemotron-ocr-v1"
     DEMO_PORTFOLIO_ID: str = ""
     SECRET_KEY: str = "dev-secret-change-me"
 

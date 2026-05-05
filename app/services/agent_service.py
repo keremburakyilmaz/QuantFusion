@@ -1,15 +1,16 @@
 """LangGraph agent + Nemotron regime commentary.
 
 Two responsibilities:
-  1. regime_commentary(regime, holdings, risk) — one LLM call producing
+  1. regime_commentary(regime, holdings, risk) - one LLM call producing
      a 2-3 sentence narrative. Cached in Redis by (regime, sharpe-bucket,
      ticker-set) to keep NIM cost bounded on the public analyzer.
-  2. query(query, portfolio_id) — LangGraph graph
+  2. query(query, portfolio_id) - LangGraph graph
      (intent_router → tool_call → response_formatter) returning a
      natural-language answer drawn from one of five tools.
 """
 
 
+import asyncio
 import json
 import logging
 import re
@@ -31,7 +32,7 @@ logger = logging.getLogger(__name__)
 COMMENTARY_TTL = 3600
 COMMENTARY_FALLBACK = ""
 
-LEGAL_INTENTS = {"risk", "optimize", "regime", "backtest", "holdings"}
+LEGAL_INTENTS = {"risk", "optimize", "regime", "backtest", "holdings", "earnings"}
 DEFAULT_INTENT = "holdings"
 
 
@@ -74,12 +75,13 @@ class AgentService:
         regime: RegimeSnapshotResponse,
         holdings: list[HoldingInput],
         risk: RiskMetrics,
+        earnings: dict | None = None,
     ) -> str:
         llm = self.llm
         if llm is None:
             return COMMENTARY_FALLBACK
 
-        cache_key = self._commentary_key(regime, holdings, risk)
+        cache_key = self._commentary_key(regime, holdings, risk, earnings)
         if self.redis is not None and cache_key:
             try:
                 cached = await self.redis.get(cache_key)
@@ -88,9 +90,9 @@ class AgentService:
             except Exception:
                 logger.exception("redis read failed for commentary")
 
-        prompt = self._build_commentary_prompt(regime, holdings, risk)
+        prompt = self._build_commentary_prompt(regime, holdings, risk, earnings)
         try:
-            response = await llm.ainvoke(prompt)
+            response = await asyncio.wait_for(llm.ainvoke(prompt), timeout=50.0)
             text = _strip_preamble((response.content or "").strip())
         except Exception:
             logger.exception("regime_commentary LLM call failed")
@@ -112,6 +114,7 @@ class AgentService:
         regime: RegimeSnapshotResponse,
         holdings: list[HoldingInput],
         risk: RiskMetrics,
+        earnings: dict | None = None,
     ) -> str:
         tickers_str = ", ".join(
             f"{h.ticker} ({h.weight * 100:.0f}%)" for h in holdings
@@ -122,11 +125,34 @@ class AgentService:
         beta = _fmt_num(risk.beta)
         confidence = _fmt_pct(regime.confidence) if regime.confidence else "?"
 
+        earnings_block = ""
+        if earnings:
+            lines = []
+            for ticker, sig in earnings.items():
+                eps_a = sig.get("eps_actual") if isinstance(sig, dict) else getattr(sig, "eps_actual", None)
+                eps_e = sig.get("eps_estimate") if isinstance(sig, dict) else getattr(sig, "eps_estimate", None)
+                beat = sig.get("eps_beat") if isinstance(sig, dict) else getattr(sig, "eps_beat", None)
+                guidance = sig.get("guidance") if isinstance(sig, dict) else getattr(sig, "guidance", None)
+                sentiment = sig.get("sentiment", "neutral") if isinstance(sig, dict) else getattr(sig, "sentiment", "neutral")
+                parts = [f"{ticker}:"]
+                if eps_a is not None:
+                    parts.append(f"EPS ${eps_a:.2f} actual")
+                if eps_e is not None:
+                    parts.append(f"vs ${eps_e:.2f} est")
+                if beat is not None:
+                    parts.append("(beat)" if beat else "(missed)")
+                if guidance:
+                    parts.append(f"guidance {guidance}")
+                parts.append(f"sentiment {sentiment}")
+                lines.append(" ".join(parts))
+            earnings_block = "\nRecent earnings:\n" + "\n".join(f"- {l}" for l in lines) + "\n"
+
         return (
             f"Market regime: {regime.regime} (confidence {confidence})\n"
             f"Portfolio: {tickers_str}\n"
             f"Sharpe={sharpe}, VaR_95={var_hist}, "
-            f"Max Drawdown={max_dd}, Beta={beta}\n\n"
+            f"Max Drawdown={max_dd}, Beta={beta}\n"
+            f"{earnings_block}\n"
             "Write 2-3 sentences explaining how this portfolio sits in the "
             "current regime and the main risk to watch. Be specific to these "
             "tickers, not generic. Use only the values above; do not fabricate "
@@ -141,13 +167,25 @@ class AgentService:
         regime: RegimeSnapshotResponse,
         holdings: list[HoldingInput],
         risk: RiskMetrics,
+        earnings: dict | None = None,
     ) -> str | None:
         if regime is None or risk is None:
             return None
         sharpe = risk.sharpe if risk.sharpe is not None else 0.0
         bucket = round(sharpe * 4) / 4
         tickers = ",".join(sorted(h.ticker for h in holdings))
-        return f"commentary:{regime.regime}:{bucket}:{tickers}"
+        # Include a hash of earnings filing dates so stale cache is invalidated
+        # when new earnings are fetched
+        if earnings:
+            filing_sig = ":".join(
+                f"{t}={getattr(s, 'filing_date', None) or (s.get('filing_date') if isinstance(s, dict) else '')}"
+                for t, s in sorted(earnings.items())
+            )
+            import hashlib
+            eh = hashlib.md5(filing_sig.encode()).hexdigest()[:8]
+        else:
+            eh = "none"
+        return f"commentary:{regime.regime}:{bucket}:{tickers}:{eh}"
 
     # ---------- LangGraph agent ----------
 
@@ -185,12 +223,14 @@ class AgentService:
             "extract any structured arguments. Respond ONLY with a JSON "
             "object with keys 'intent' and 'args'.\n\n"
             "Legal intents: 'risk', 'optimize', 'regime', 'backtest', "
-            "'holdings'.\n"
+            "'holdings', 'earnings'.\n"
             "  - risk: questions about Sharpe, VaR, drawdown, volatility, beta\n"
             "  - optimize: requests to rebalance, find optimal weights, max Sharpe, min vol\n"
             "  - regime: questions about market regime, bull/bear, current conditions\n"
             "  - backtest: historical performance, equity curve, monthly returns\n"
-            "  - holdings: what's in my portfolio, list tickers, show weights\n\n"
+            "  - holdings: what's in my portfolio, list tickers, show weights\n"
+            "  - earnings: questions about earnings results, EPS beats/misses, guidance, "
+            "revenue, recent quarterly results\n\n"
             "Args examples: optimize -> {\"method\": \"mvo\", \"target\": \"max_sharpe\"}; "
             "backtest -> {\"lookback_years\": 1}.\n\n"
             f"User question: {state['query']}\n\n"

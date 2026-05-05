@@ -20,6 +20,10 @@ services:
         value: https://keremburakyilmaz.com,http://localhost:3000
       - key: NVIDIA_API_KEY
         sync: false
+      - key: NIM_MODEL
+        value: meta/llama-3.3-70b-instruct
+      - key: NIM_OCR_MODEL
+        value: nvidia/nemotron-ocr-v1
       - key: DEMO_PORTFOLIO_ID
         sync: false
       - key: SECRET_KEY

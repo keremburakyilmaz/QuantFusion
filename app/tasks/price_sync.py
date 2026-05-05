@@ -14,6 +14,6 @@ async def sync_prices(data_service: DataService) -> None:
     logger.info("price_sync starting for %s", DEMO_TICKERS)
     try:
         df = await data_service.get_prices(DEMO_TICKERS, lookback_days=LOOKBACK_DEFAULT)
-        logger.info("price_sync finished — %d rows in frame", len(df))
+        logger.info("price_sync finished - %d rows in frame", len(df))
     except Exception:
         logger.exception("price_sync failed")

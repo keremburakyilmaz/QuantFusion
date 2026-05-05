@@ -16,6 +16,7 @@ from app.limiter import limiter
 from app.routers import agent as agent_router
 from app.routers import analyzer as analyzer_router
 from app.routers import backtest as backtest_router
+from app.routers import document as document_router
 from app.routers import market as market_router
 from app.routers import optimize as optimize_router
 from app.routers import regime as regime_router
@@ -26,6 +27,7 @@ from app.services.analyzer_service import AnalyzerService
 from app.services.backtester import VectorizedBacktester
 from app.services.data_service import DataService
 from app.services.llm_client import get_llm
+from app.services.ocr_service import OCRService
 from app.services.optimizer import PortfolioOptimizer
 from app.services.regime_service import MODEL_PATH, RegimeService
 from app.services.risk_service import RiskService
@@ -49,6 +51,13 @@ async def lifespan(app: FastAPI):
     data_svc = app.state.data_service
     regime_svc = app.state.regime_service
 
+    ocr_svc = OCRService(
+        llm_factory=get_llm,
+        session_factory=SessionLocal,
+        redis=app.state.redis,
+    )
+    app.state.ocr_service = ocr_svc
+
     tools = {
         "holdings": lambda pid: agent_tools.holdings_tool(pid, SessionLocal),
         "risk": lambda pid: agent_tools.risk_tool(pid, SessionLocal, data_svc, risk_svc),
@@ -59,6 +68,7 @@ async def lifespan(app: FastAPI):
         "backtest": lambda pid, **kw: agent_tools.backtest_tool(
             pid, SessionLocal, data_svc, **kw
         ),
+        "earnings": lambda pid: agent_tools.earnings_tool(pid, SessionLocal, ocr_svc),
     }
     agent = AgentService(
         llm_factory=get_llm,
@@ -74,6 +84,7 @@ async def lifespan(app: FastAPI):
         backtester=VectorizedBacktester(),
         regime=app.state.regime_service,
         agent=agent,
+        ocr=ocr_svc,
     )
     app.state.snapshot_service = SnapshotService(SessionLocal)
 
@@ -135,6 +146,7 @@ app.include_router(regime_router.router, prefix="/api/regime", tags=["regime"])
 app.include_router(backtest_router.router, prefix="/api/backtest", tags=["backtest"])
 app.include_router(analyzer_router.router, prefix="/api/analyzer", tags=["analyzer"])
 app.include_router(agent_router.router, prefix="/api/agent", tags=["agent"])
+app.include_router(document_router.router, prefix="/api/documents", tags=["documents"])
 
 
 @app.get("/api/health")

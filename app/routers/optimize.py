@@ -16,6 +16,7 @@ from app.schemas.optimization import (
     OptimizeStatelessRequest,
 )
 from app.services.data_service import DataService, LOOKBACK_DEFAULT
+from app.services.ocr_service import OCRService
 from app.services.optimizer import PortfolioOptimizer
 from app.services.portfolio_loader import load_holdings
 from app.services.regime_service import RegimeService
@@ -31,6 +32,10 @@ def get_data_service(request: Request) -> DataService:
 
 def get_regime_service(request: Request) -> RegimeService | None:
     return getattr(request.app.state, "regime_service", None)
+
+
+def get_ocr_service(request: Request) -> OCRService | None:
+    return getattr(request.app.state, "ocr_service", None)
 
 
 async def _resolve_regime_probabilities(
@@ -62,6 +67,7 @@ async def _run_optimization(
     views: list[dict] | None = None,
     risk_aversion: float = 2.5,
     regime_probabilities: dict[str, float] | None = None,
+    earnings: dict | None = None,
 ) -> OptimizationResult:
     returns = await data.get_returns(tickers, lookback_days=LOOKBACK_DEFAULT)
     if returns.empty or len(returns.columns) < 2:
@@ -96,6 +102,19 @@ async def _run_optimization(
                 rf=rf,
                 constraints=constraints_dict,
             )
+        if method == "earnings_tilt":
+            if not regime_probabilities:
+                raise HTTPException(
+                    status_code=503,
+                    detail="earnings_tilt requires regime model to be available",
+                )
+            return optimizer.earnings_tilt(
+                returns, cov,
+                regime_probabilities=regime_probabilities,
+                earnings=earnings,
+                rf=rf,
+                constraints=constraints_dict,
+            )
         raise HTTPException(status_code=400, detail=f"Unknown method: {method}")
 
     if method == "black_litterman":
@@ -126,6 +145,7 @@ async def optimize_run(
     db: Session = Depends(get_db),
     data: DataService = Depends(get_data_service),
     regime_service: RegimeService | None = Depends(get_regime_service),
+    ocr_service: OCRService | None = Depends(get_ocr_service),
 ) -> OptimizationResult:
     weights = load_holdings(db, body.portfolio_id)
     tickers = list(weights.keys())
@@ -133,10 +153,14 @@ async def optimize_run(
     views_dict = [v.model_dump() for v in body.views] if body.views else None
 
     regime_probs = None
-    if body.method == "regime_blended":
+    earnings: dict | None = None
+    if body.method in ("regime_blended", "earnings_tilt"):
         regime_probs = await _resolve_regime_probabilities(
             body.regime_probabilities, regime_service
         )
+    if body.method == "earnings_tilt" and ocr_service is not None:
+        raw = await ocr_service.get_latest_signals(tickers)
+        earnings = {t: s.model_dump() for t, s in raw.items()} if raw else None
 
     result = await _run_optimization(
         body.method,
@@ -147,6 +171,7 @@ async def optimize_run(
         views=views_dict,
         risk_aversion=body.risk_aversion,
         regime_probabilities=regime_probs,
+        earnings=earnings,
     )
 
     db.add(
@@ -168,16 +193,21 @@ async def optimize_stateless(
     body: OptimizeStatelessRequest,
     data: DataService = Depends(get_data_service),
     regime_service: RegimeService | None = Depends(get_regime_service),
+    ocr_service: OCRService | None = Depends(get_ocr_service),
 ) -> OptimizationResult:
     tickers = [h.ticker for h in body.holdings]
     constraints_dict = body.constraints.model_dump() if body.constraints else None
     views_dict = [v.model_dump() for v in body.views] if body.views else None
 
     regime_probs = None
-    if body.method == "regime_blended":
+    earnings: dict | None = None
+    if body.method in ("regime_blended", "earnings_tilt"):
         regime_probs = await _resolve_regime_probabilities(
             body.regime_probabilities, regime_service
         )
+    if body.method == "earnings_tilt" and ocr_service is not None:
+        raw = await ocr_service.get_latest_signals(tickers)
+        earnings = {t: s.model_dump() for t, s in raw.items()} if raw else None
 
     return await _run_optimization(
         body.method,
@@ -188,6 +218,7 @@ async def optimize_stateless(
         views=views_dict,
         risk_aversion=body.risk_aversion,
         regime_probabilities=regime_probs,
+        earnings=earnings,
     )
 
 

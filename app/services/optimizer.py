@@ -14,6 +14,7 @@ TRADING_DAYS = 252
 DEFAULT_MIN_WEIGHT = 0.01
 DEFAULT_MAX_WEIGHT = 0.60
 TAU = 0.05
+EARNINGS_TILT = 0.10
 
 
 class PortfolioOptimizer:
@@ -255,6 +256,78 @@ class PortfolioOptimizer:
             sharpe=result.sharpe,
             solve_ms=result.solve_ms,
         )
+
+    def earnings_tilt(
+        self,
+        returns: pd.DataFrame,
+        cov: np.ndarray,
+        regime_probabilities: dict[str, float],
+        earnings: dict | None = None,
+        rf: float = 0.04,
+        constraints: dict | None = None,
+    ) -> OptimizationResult:
+        """Regime-blended weights tilted by per-ticker earnings sentiment.
+
+        Positive signal (eps_beat=True, sentiment='positive') → weight * (1 + EARNINGS_TILT).
+        Negative signal (eps_beat=False, sentiment='negative') → weight * (1 - EARNINGS_TILT).
+        Weights are re-normalised after tilting.  Falls back to regime_blended
+        when no earnings signals are available.
+        """
+        base = self.regime_blended(returns, cov, regime_probabilities, rf, constraints)
+
+        if not earnings:
+            result = OptimizationResult(
+                method="earnings_tilt",
+                target=base.target,
+                weights=base.weights,
+                expected_return=base.expected_return,
+                volatility=base.volatility,
+                sharpe=base.sharpe,
+                solve_ms=base.solve_ms,
+            )
+            result.regime_weights = getattr(base, "regime_weights", {})
+            result.components = getattr(base, "components", {})
+            return result
+
+        tickers = list(returns.columns)
+        w = np.array([base.weights.get(t, 0.0) for t in tickers])
+
+        for i, ticker in enumerate(tickers):
+            sig = earnings.get(ticker)
+            if sig is None:
+                continue
+            eps_beat = sig.get("eps_beat") if isinstance(sig, dict) else getattr(sig, "eps_beat", None)
+            sentiment = sig.get("sentiment", "neutral") if isinstance(sig, dict) else getattr(sig, "sentiment", "neutral")
+            if eps_beat is True and sentiment == "positive":
+                w[i] *= (1.0 + EARNINGS_TILT)
+            elif eps_beat is False and sentiment == "negative":
+                w[i] *= max(1.0 - EARNINGS_TILT, 0.0)
+
+        w = np.clip(w, 0.0, None)
+        total = w.sum()
+        if total <= 0:
+            w = np.full(len(tickers), 1.0 / len(tickers))
+        else:
+            w = w / total
+
+        start = time.perf_counter()
+        sigma = np.asarray(cov)
+        mu = returns.mean().values * TRADING_DAYS
+        elapsed_ms = int((time.perf_counter() - start) * 1000) + base.solve_ms
+        result = self._make_result(
+            "earnings_tilt", None, tickers, w, mu, sigma, rf, elapsed_ms
+        )
+        result.regime_weights = getattr(base, "regime_weights", {})
+        result.components = getattr(base, "components", {})
+        result.earnings_signals = {
+            t: (
+                earnings[t] if isinstance(earnings[t], dict)
+                else earnings[t].model_dump() if hasattr(earnings[t], "model_dump")
+                else dict(earnings[t])
+            )
+            for t in tickers if t in earnings
+        }
+        return result
 
     def efficient_frontier(
         self,

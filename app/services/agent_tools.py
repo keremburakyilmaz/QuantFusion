@@ -1,6 +1,6 @@
 """Tool adapters that turn portfolio_id + an internal service into a JSON dict.
 
-Used by AgentService.query — the LangGraph agent calls these directly,
+Used by AgentService.query - the LangGraph agent calls these directly,
 not via HTTP self-loopback.
 """
 
@@ -76,6 +76,33 @@ async def optimize_tool(
     return result.model_dump(mode="json")
 
 
+async def earnings_tool(
+    portfolio_id: uuid.UUID,
+    session_factory,
+    ocr_service,
+) -> dict[str, Any]:
+    """Return latest earnings signals for all holdings in the portfolio."""
+    weights = await asyncio.to_thread(_load_holdings, session_factory, portfolio_id)
+    tickers = list(weights.keys())
+    if not tickers:
+        return {"error": "no holdings in portfolio"}
+    signals = await ocr_service.get_latest_signals(tickers)
+    if not signals:
+        return {
+            "message": "No earnings data available yet. "
+            "Fetch earnings first via POST /api/documents/earnings.",
+            "tickers": tickers,
+        }
+    return {
+        ticker: (
+            sig.model_dump() if hasattr(sig, "model_dump")
+            else sig if isinstance(sig, dict)
+            else dict(sig)
+        )
+        for ticker, sig in signals.items()
+    }
+
+
 async def backtest_tool(
     portfolio_id: uuid.UUID,
     session_factory,
@@ -100,7 +127,7 @@ async def backtest_tool(
         _run_sync, weights, sub, 10_000.0,
         rebalance_freq, transaction_cost_bps, benchmark,
     )
-    # Trim equity curve for prompt size — only metrics + monthly returns matter
+    # Trim equity curve for prompt size - only metrics + monthly returns matter
     return {
         "metrics": result.metrics.model_dump(),
         "monthly_returns": [m.model_dump() for m in result.monthly_returns],

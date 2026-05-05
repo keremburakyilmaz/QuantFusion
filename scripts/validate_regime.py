@@ -258,7 +258,7 @@ def main() -> int:
 
     loaded = joblib.load(MODEL_PATH)
     if len(loaded) != 4:
-        print("Model file missing scaler — retrain first.")
+        print("Model file missing scaler - retrain first.")
         return 1
     model, scaler, label_map, feature_names = loaded
 
@@ -272,7 +272,7 @@ def main() -> int:
 
     features = RegimeService._build_features(spy, vix)
     if features.empty:
-        print("No features built — bailing.")
+        print("No features built - bailing.")
         return 1
 
     print(f"Sample range:  {features.index.min().date()} -> {features.index.max().date()}")

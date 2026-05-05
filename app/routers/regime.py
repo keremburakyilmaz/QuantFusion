@@ -41,7 +41,7 @@ async def get_current(request: Request) -> RegimeSnapshotResponse:
     if snapshot is None:
         raise HTTPException(
             status_code=503,
-            detail="Regime model not yet available — try again shortly",
+            detail="Regime model not yet available - try again shortly",
         )
     return snapshot
 

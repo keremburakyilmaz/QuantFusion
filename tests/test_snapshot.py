@@ -73,7 +73,7 @@ class _FakeSession:
         self._pending.append(snapshot)
 
     def execute(self, stmt):
-        # Accept either a select or a delete statement — inspect the
+        # Accept either a select or a delete statement - inspect the
         # compiled SQL string to branch.
         sql = str(stmt).lower()
         if sql.startswith("select"):
