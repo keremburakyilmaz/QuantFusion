@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
     CORS_ORIGINS: str = "http://localhost:3000"
     NVIDIA_API_KEY: str = ""
+    NIM_MODEL: str = "nvidia/llama-3.1-nemotron-70b-instruct"
+    NIM_BASE_URL: str = "https://integrate.api.nvidia.com/v1"
     DEMO_PORTFOLIO_ID: str = ""
     SECRET_KEY: str = "dev-secret-change-me"
 

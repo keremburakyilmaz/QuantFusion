@@ -1,4 +1,4 @@
-from __future__ import annotations
+
 
 import asyncio
 import logging
@@ -8,6 +8,7 @@ import pandas as pd
 
 from app.schemas.analyzer import AnalysisReport
 from app.schemas.common import HoldingInput
+from app.services.agent_service import AgentService
 from app.services.backtester import VectorizedBacktester, _run_sync
 from app.services.data_service import DataService
 from app.services.optimizer import PortfolioOptimizer
@@ -26,12 +27,14 @@ class AnalyzerService:
         optimizer: PortfolioOptimizer,
         backtester: VectorizedBacktester,
         regime: RegimeService | None,
+        agent: AgentService | None = None,
     ) -> None:
         self.data = data
         self.risk = risk
         self.optimizer = optimizer
         self.backtester = backtester
         self.regime = regime
+        self.agent = agent
 
     async def validate(self, tickers: list[str]) -> dict[str, list[str]]:
         return await self.data.validate_tickers(tickers)
@@ -96,6 +99,12 @@ class AnalyzerService:
                 returns, cov, regime.probabilities, rf, None,
             )
 
+        commentary = ""
+        if regime is not None and self.agent is not None and self.agent.enabled:
+            commentary = await self.agent.regime_commentary(
+                regime, holdings, risk_metrics
+            )
+
         return AnalysisReport(
             holdings=holdings,
             risk=risk_metrics,
@@ -106,7 +115,7 @@ class AnalyzerService:
             backtest_1y=bt_1y,
             backtest_3y=bt_3y,
             regime=regime,
-            regime_commentary="",
+            regime_commentary=commentary,
             fundamentals=fundamentals,
             generated_at=datetime.now(tz=timezone.utc),
         )

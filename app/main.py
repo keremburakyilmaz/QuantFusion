@@ -13,15 +13,19 @@ from app.cache import create_redis
 from app.config import settings
 from app.database import SessionLocal
 from app.limiter import limiter
+from app.routers import agent as agent_router
 from app.routers import analyzer as analyzer_router
 from app.routers import backtest as backtest_router
 from app.routers import market as market_router
 from app.routers import optimize as optimize_router
 from app.routers import regime as regime_router
 from app.routers import risk as risk_router
+from app.services import agent_tools
+from app.services.agent_service import AgentService
 from app.services.analyzer_service import AnalyzerService
 from app.services.backtester import VectorizedBacktester
 from app.services.data_service import DataService
+from app.services.llm_client import get_llm
 from app.services.optimizer import PortfolioOptimizer
 from app.services.regime_service import MODEL_PATH, RegimeService
 from app.services.risk_service import RiskService
@@ -39,12 +43,37 @@ async def lifespan(app: FastAPI):
     app.state.redis = create_redis()
     app.state.data_service = DataService(app.state.redis, SessionLocal)
     app.state.regime_service = RegimeService(app.state.data_service, SessionLocal)
+
+    risk_svc = RiskService()
+    optimizer_svc = PortfolioOptimizer()
+    data_svc = app.state.data_service
+    regime_svc = app.state.regime_service
+
+    tools = {
+        "holdings": lambda pid: agent_tools.holdings_tool(pid, SessionLocal),
+        "risk": lambda pid: agent_tools.risk_tool(pid, SessionLocal, data_svc, risk_svc),
+        "regime": lambda pid: agent_tools.regime_tool(regime_svc),
+        "optimize": lambda pid, **kw: agent_tools.optimize_tool(
+            pid, SessionLocal, data_svc, optimizer_svc, **kw
+        ),
+        "backtest": lambda pid, **kw: agent_tools.backtest_tool(
+            pid, SessionLocal, data_svc, **kw
+        ),
+    }
+    agent = AgentService(
+        llm_factory=get_llm,
+        redis=app.state.redis,
+        tools=tools,
+    )
+    app.state.agent_service = agent
+
     app.state.analyzer_service = AnalyzerService(
         data=app.state.data_service,
-        risk=RiskService(),
-        optimizer=PortfolioOptimizer(),
+        risk=risk_svc,
+        optimizer=optimizer_svc,
         backtester=VectorizedBacktester(),
         regime=app.state.regime_service,
+        agent=agent,
     )
     app.state.snapshot_service = SnapshotService(SessionLocal)
 
@@ -105,6 +134,7 @@ app.include_router(optimize_router.router, prefix="/api/optimize", tags=["optimi
 app.include_router(regime_router.router, prefix="/api/regime", tags=["regime"])
 app.include_router(backtest_router.router, prefix="/api/backtest", tags=["backtest"])
 app.include_router(analyzer_router.router, prefix="/api/analyzer", tags=["analyzer"])
+app.include_router(agent_router.router, prefix="/api/agent", tags=["agent"])
 
 
 @app.get("/api/health")
