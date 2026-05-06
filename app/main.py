@@ -149,6 +149,6 @@ app.include_router(agent_router.router, prefix="/api/agent", tags=["agent"])
 app.include_router(document_router.router, prefix="/api/documents", tags=["documents"])
 
 
-@app.get("/api/health")
+@app.api_route("/api/health", methods=["GET", "HEAD"])
 def health() -> dict[str, str]:
     return {"status": "ok"}

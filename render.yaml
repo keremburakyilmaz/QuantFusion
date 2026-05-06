@@ -12,10 +12,7 @@ services:
       - key: DATABASE_MIGRATION_URL
         sync: false
       - key: REDIS_URL
-        fromService:
-          type: redis
-          name: quantfusion-redis
-          property: connectionString
+        sync: false
       - key: CORS_ORIGINS
         value: https://keremburakyilmaz.com,http://localhost:3000
       - key: NVIDIA_API_KEY
@@ -28,8 +25,3 @@ services:
         sync: false
       - key: SECRET_KEY
         generateValue: true
-
-  - type: redis
-    name: quantfusion-redis
-    plan: free
-    ipAllowList: []
