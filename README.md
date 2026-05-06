@@ -35,7 +35,7 @@ Each of those questions maps to a specific analytical module in this system.
 
 ### 1. The True Cost of Risk
 
-Most people think about risk as "how much can I lose?" QuantFusion teaches a more precise version: **how much risk am I taking per unit of expected return?** This is the foundation of modern portfolio theory. Once you start measuring risk with numbers - volatility, Value at Risk, drawdown, beta - the intuitive sense of "this feels risky" becomes something you can quantify, compare, and optimize.
+Most people think about risk as "how much can I lose?" QuantFusion shows a more precise version: **how much risk am I taking per unit of expected return?** This is the foundation of modern portfolio theory. Once you start measuring risk with numbers - volatility, Value at Risk, drawdown, beta - the intuitive sense of "this feels risky" becomes something you can quantify, compare, and optimize.
 
 ### 2. Why Diversification Is Mathematical, Not Conceptual
 
