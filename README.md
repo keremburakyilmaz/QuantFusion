@@ -12,6 +12,24 @@ If you have a portfolio of stocks or ETFs, QuantFusion tells you not just what y
 
 The goal is to show you to think like a quantitative analyst.
 
+A live showcase of the analyzer is hosted at [keremburakyilmaz.com/QuantFusion](https://keremburakyilmaz.com/QuantFusion).
+
+---
+
+## Screenshots
+
+**Overview** — portfolio summary, risk dashboard, AI commentary, regime probabilities.
+
+![Overview](docs/screenshots/overview.png)
+
+**Optimize** — method comparison table, efficient frontier, optimization lab.
+
+![Optimize](docs/screenshots/optimize.png)
+
+**Performance** — 1Y / 3Y backtests with monthly return heatmap.
+
+![Performance](docs/screenshots/performance.png)
+
 ---
 
 ## What Problem Does This Solve?
